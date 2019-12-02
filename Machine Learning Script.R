@@ -1,3 +1,6 @@
+library(tidyverse)
+library(caret)
+
 ################################
 # Create edx set, validation set
 ################################
@@ -36,7 +39,6 @@ temp <- movielens[test_index,]
 
 # Make sure userId and movieId in validation set are also in edx set
 
-
 validation <- temp %>% 
   semi_join(edx, by = "movieId") %>%
   semi_join(edx, by = "userId")
@@ -47,3 +49,13 @@ removed <- anti_join(temp, validation)
 edx <- rbind(edx, removed)
 
 rm(dl, ratings, movies, test_index, temp, movielens, removed)
+
+################################
+#Machine Learning Algorithm
+################################
+
+#create training and test sets from edx
+
+train_ind = createDataPartition(edx$rating, p = 0.9, list = FALSE)
+train_edx = edx[trainind,]
+test_edx = edx[-trainind,]
