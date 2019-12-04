@@ -8,23 +8,95 @@ output: pdf_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+## Code
 
-## R Markdown
+We first run the initial setup code provided to create the edx and validation datasets
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+```{r setup, echo=FALSE}
+################################
+# Create edx set, validation set
+################################
 
-```{r cars}
-summary(cars)
+# Note: this process could take a couple of minutes
+
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
+if(!require(data.table)) install.packages("data.table", repos = "http://cran.us.r-project.org")
+
+# MovieLens 10M dataset:
+# https://grouplens.org/datasets/movielens/10m/
+# http://files.grouplens.org/datasets/movielens/ml-10m.zip
+
+dl <- tempfile()
+download.file("http://files.grouplens.org/datasets/movielens/ml-10m.zip", dl)
+
+ratings <- fread(text = gsub("::", "\t", readLines(unzip(dl, "ml-10M100K/ratings.dat"))),
+                 col.names = c("userId", "movieId", "rating", "timestamp"))
+
+movies <- str_split_fixed(readLines(unzip(dl, "ml-10M100K/movies.dat")), "\\::", 3)
+colnames(movies) <- c("movieId", "title", "genres")
+movies <- as.data.frame(movies) %>% mutate(movieId = as.numeric(levels(movieId))[movieId],
+                                           title = as.character(title),
+                                           genres = as.character(genres))
+
+movielens <- left_join(ratings, movies, by = "movieId")
+
+# Validation set will be 10% of MovieLens data
+
+set.seed(1, sample.kind="Rounding")
+# if using R 3.5 or earlier, use `set.seed(1)` instead
+test_index <- createDataPartition(y = movielens$rating, times = 1, p = 0.1, list = FALSE)
+edx <- movielens[-test_index,]
+temp <- movielens[test_index,]
+
+# Make sure userId and movieId in validation set are also in edx set
+
+validation <- temp %>% 
+  semi_join(edx, by = "movieId") %>%
+  semi_join(edx, by = "userId")
+
+# Add rows removed from validation set back into edx set
+
+removed <- anti_join(temp, validation)
+edx <- rbind(edx, removed)
+
+rm(dl, ratings, movies, test_index, temp, movielens, removed)
 ```
 
-## Including Plots
+## Intro
 
-You can also embed plots, for example:
+We will be implementing a recommendation system following the approach explained in this course.
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+The movielens dataset is made up of 10 million observations, each corresponding to a rating given to a movie by an user. Each observation has 6 variables:
+
+```{r edx}
+head(edx)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+The variables userId and movieId are numeric identifiers for users and movies respectively. The rating variable is the numeric rating given by the indicated user to the indicated movie, in a scale from 0 to 5 by increments of 0.5 (due to half star ratings). The variables title and genre are characters and indicate the title of the movie (which may not be unique, therefore it is important to distinguish movies by movieId) and the genres associated with it.
+
+Predicting a user's rating of a movie is a regression machine learning problem because we are predicting a numerical value. We will use a linear model that predicts ratings accounting for the biases of specific movies and users, caused by movies being either good or bad, and users having higher or lower quality standards.
+
+To increase the precision of our model, we will regularize these biases to penalize users and movies for which we have too little data to make a well-informed prediction.
+
+After running the code we split the edx dataset into a training and a test set, in order to avoid using the validation dataset as a test set
+
+```{r partition}
+library(caret)
+library(tidyverse)
+
+#create training and test sets from edx
+
+train_ind = createDataPartition(edx$rating, p = 0.9, list = FALSE)
+train_edx = edx[train_ind,]
+test_edx = edx[-train_ind,]
+
+#remove from test set users and movies not present in training set
+
+test_edx <- test_edx %>% 
+  semi_join(train_edx, by = "movieId") %>%
+  semi_join(train_edx, by = "userId")
+```
+
+
