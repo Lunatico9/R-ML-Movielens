@@ -47,12 +47,13 @@ edx <- rbind(edx, removed)
 
 rm(dl, ratings, movies, test_index, temp, movielens, removed)
 
-################################
-#Machine Learning Algorithm
-################################
-
 library(caret)
 library(tidyverse)
+
+###########################
+#Machine Learning Algorithm
+###########################
+
 
 #create training and test sets from edx
 
@@ -72,19 +73,59 @@ RMSE <- function(true_ratings, predicted_ratings){
   sqrt(mean((true_ratings - predicted_ratings)^2))
 }
 
+
+#optimize tuning parameter lambda validating on the test set
+
+lambda_RMSE = function(lambda) {
+#calculate overall rating mean
+mu <- mean(train_edx$rating)
+
+#calculate regularized movie bias using lambda
+b_i <- train_edx %>% 
+  group_by(movieId) %>%
+  summarize(b_i = sum(rating - mu)/(n()+lambda))
+
+#calculate regularized user bias using lambda
+b_u <- train_edx %>% 
+  left_join(b_i, by="movieId") %>%
+  group_by(userId) %>%
+  summarize(b_u = sum(rating - b_i - mu)/(n()+lambda))
+
+#predict ratings on the validation set
+predicted_ratings <- 
+  test_edx %>% 
+  left_join(b_i, by = "movieId") %>%
+  left_join(b_u, by = "userId") %>%
+  mutate(pred = mu + b_i + b_u) %>%
+  pull(pred)
+
+return(RMSE(predicted_ratings, test_edx$rating))
+
+}
+#try lambdas from 1 to 10 by increments of 0.25
+lambdas = seq(1,10,0.25)
+rmses = sapply(lambdas, lambda_RMSE)
+
+#pick best lambda
+lambda = lambdas[which.min(rmses)]
+
+###################################
+#Final prediction on validation set
+###################################
+
 #calculate overall rating mean
 mu <- mean(edx$rating)
 
-#calculate regularized movie bias with lambda = 3.25
+#calculate regularized movie bias with optimized lambda
 b_i <- edx %>% 
   group_by(movieId) %>%
-  summarize(b_i = sum(rating - mu)/(n()+3.25))
+  summarize(b_i = sum(rating - mu)/(n()+lambda))
 
-#calculate regularized user bias with lambda = 3.25
+#calculate regularized user bias with optimized lambda
 b_u <- edx %>% 
   left_join(b_i, by="movieId") %>%
   group_by(userId) %>%
-  summarize(b_u = sum(rating - b_i - mu)/(n()+3.25))
+  summarize(b_u = sum(rating - b_i - mu)/(n()+lambda))
 
 #predict ratings on the validation set
 predicted_ratings <- 
