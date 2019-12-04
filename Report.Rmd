@@ -58,6 +58,9 @@ removed <- anti_join(temp, validation)
 edx <- rbind(edx, removed)
 
 rm(dl, ratings, movies, test_index, temp, movielens, removed)
+
+library(caret)
+library(tidyverse)
 ```
 
 ## Intro
@@ -74,15 +77,42 @@ The variables userId and movieId are numeric identifiers for users and movies re
 
 Predicting a user's rating of a movie is a regression machine learning problem because we are predicting a numerical value. We will use a linear model that predicts ratings accounting for the biases of specific movies and users, caused by movies being either good or bad, and users having higher or lower quality standards.
 
-To increase the precision of our model, we will regularize these biases to penalize users and movies for which we have too little data to make a well-informed prediction.
+To increase the precision of our model, we will regularize these biases to penalize users and movies for which we have too little data to make a well-informed prediction, tuning the lambda parameter with cross-validation.
 
-## Code
+## Method
+
+As previously shown during the course, the number of movies that have only received few ratings is very high with half the movies having received less than about 125 ratings. Because of this regularization might help with improving the accuracy of the model.
+
+```{r histmovies, echo = FALSE}
+edx %>%
+  group_by(movieId) %>%
+  summarize(ratings_by_movie = n()) %>%
+  ggplot(aes(x = ratings_by_movie, y = ..count..)) +
+  geom_histogram(bins = 30) +
+  geom_vline(aes(xintercept = median(ratings_by_movie), color = "median"), linetype = "dashed", size = 1, show.legend = TRUE) +
+  scale_x_log10() +
+  scale_color_manual(name = "", values = c("red"))
+```
+
+We also see that similarly, most users have expressed less than 65 ratings, with a steadily decreasing amount of users being more prolific in expressing ratings. Regularization can be helpful here too.
+
+```{r histusers, echo = FALSE}
+edx %>%
+  group_by(userId) %>%
+  summarize(ratings_by_user = n()) %>%
+  ggplot(aes(x = ratings_by_user, y = ..count..)) +
+  geom_histogram(bins = 30) +
+  geom_vline(aes(xintercept = median(ratings_by_user), color = "median"), linetype = "dashed", size = 1, show.legend = TRUE) +
+  scale_x_log10() +
+  scale_color_manual(name = "", values = c("red"))
+```
+
+
+## Results
 
 After running the provided initial setup code we split the edx dataset into a training and a test set, in order to avoid using the validation dataset as a test set
 
 ```{r partition}
-library(caret)
-library(tidyverse)
 
 #create training and test sets from edx
 
@@ -96,5 +126,6 @@ test_edx <- test_edx %>%
   semi_join(train_edx, by = "movieId") %>%
   semi_join(train_edx, by = "userId")
 ```
+
 
 
