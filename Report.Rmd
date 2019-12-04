@@ -8,12 +8,8 @@ output: pdf_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
-## Code
 
-We first run the initial setup code provided to create the edx and validation datasets
-
-
-```{r setup, echo=FALSE}
+```{r init, echo=FALSE, include=FALSE}
 ################################
 # Create edx set, validation set
 ################################
@@ -74,13 +70,15 @@ The movielens dataset is made up of 10 million observations, each corresponding 
 head(edx)
 ```
 
-The variables userId and movieId are numeric identifiers for users and movies respectively. The rating variable is the numeric rating given by the indicated user to the indicated movie, in a scale from 0 to 5 by increments of 0.5 (due to half star ratings). The variables title and genre are characters and indicate the title of the movie (which may not be unique, therefore it is important to distinguish movies by movieId) and the genres associated with it.
+The variables userId and movieId are numeric identifiers for users and movies respectively. The rating variable is the numeric rating given by the indicated user to the indicated movie, in a scale from 0 to 5 by increments of 0.5 (due to half star ratings). The variables title and genre are characters and indicate the title of the movie (which may not be unique, therefore it is important to distinguish movies by movieId) and the genres associated with it. The timestamp date variable indicates when the rating was expressed.
 
 Predicting a user's rating of a movie is a regression machine learning problem because we are predicting a numerical value. We will use a linear model that predicts ratings accounting for the biases of specific movies and users, caused by movies being either good or bad, and users having higher or lower quality standards.
 
 To increase the precision of our model, we will regularize these biases to penalize users and movies for which we have too little data to make a well-informed prediction.
 
-After running the code we split the edx dataset into a training and a test set, in order to avoid using the validation dataset as a test set
+## Code
+
+After running the provided initial setup code we split the edx dataset into a training and a test set, in order to avoid using the validation dataset as a test set
 
 ```{r partition}
 library(caret)
