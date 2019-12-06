@@ -91,7 +91,7 @@ b_u <- train_edx %>%
   group_by(userId) %>%
   summarize(b_u = sum(rating - b_i - mu)/(n()+lambda))
 
-#predict ratings on the validation set
+#predict ratings on the test set
 predicted_ratings <- 
   test_edx %>% 
   left_join(b_i, by = "movieId") %>%
