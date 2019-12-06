@@ -1,7 +1,7 @@
 ---
-title: "Report"
+title: "Movielens Machine Learning Project Report"
 author: "Lorenzo Luna"
-date: "02/12/2019"
+date: "06/12/2019"
 output: pdf_document
 ---
 
@@ -73,15 +73,15 @@ The movielens dataset is made up of 10 million observations, each corresponding 
 head(edx)
 ```
 
-The variables userId and movieId are numeric identifiers for users and movies respectively. The rating variable is the numeric rating given by the indicated user to the indicated movie, in a scale from 0 to 5 by increments of 0.5 (due to half star ratings). The variables title and genre are characters and indicate the title of the movie (which may not be unique, therefore it is important to distinguish movies by movieId) and the genres associated with it. The timestamp date variable indicates when the rating was expressed.
+The variables userId and movieId are numeric identifiers for users and movies respectively. The rating variable is the numeric rating given by the indicated user to the indicated movie, in a scale from 0.5 to 5 by increments of 0.5 (due to half star ratings). The variables title and genre are characters and indicate the title of the movie (which may not be unique, therefore it is important to distinguish movies by movieId) and the genres associated with it. The timestamp date variable indicates when the rating was expressed.
 
 Predicting a user's rating of a movie is a regression machine learning problem because we are predicting a numerical value. We will use a linear model that predicts ratings accounting for the biases of specific movies and users, caused by movies being either good or bad, and users having higher or lower quality standards.
 
-To increase the precision of our model, we will regularize these biases to penalize users and movies for which we have too little data to make a well-informed prediction, tuning the lambda parameter with cross-validation.
+To increase the precision of our model, we will regularize these biases to penalize users and movies for which we have too little data to make a well-informed prediction, tuning the $\lambda$ parameter with cross-validation.
 
 ## Method
 
-The data shows that there is a bias effect depending on both the users and the movies, thus we will be estimating this effect for each user and movie, in order to predict ratings expressed by those users on movies they previously didn't rate.
+The data shows that there is a bias effect caused by both the users and the movies, thus we will be estimating this effect for each user and movie, in order to predict ratings expressed by those users on movies they previously didn't rate.
 
 ```{r biases}
 edx %>%
@@ -133,7 +133,7 @@ edx %>%
 ```
 
 Given these observation, we will train a simple machine learning algorithm that estimates regularized biases for each user and movie and uses those, as well as the overall mean of ratings, to make a prediction on unknown ratings, through the following model: $$Y_{u,i} = \mu + b_{i} + b_{u} + \varepsilon_{u,i}$$
-Where $Y_{u,i}$ is the rating from user $u$ of movie $i$, $\varepsilon_{u,i}$ is an indipendent and identically distributed random variable representing the error in our estimate, $\mu$ is the mean of all ratings, $b_{i}$ is the regularized bias effect for movie $i$ and $b_{u}$ is the regularized bias effect for user $u$. These biases are regularized using with the optimal parameter $\lambda$ determined using cross-validation on the test set. They are estimated as follows: $$\hat{b}_{i}(\lambda) = \frac{1}{\lambda + n_{i}}\sum^{n_{i}}_{u = 1}(Y_{u,i} - \hat{\mu})$$ $$\hat{b}_{u}(\lambda) = \frac{1}{\lambda + n_{u}}\sum^{n_{u}}_{i = 1}(Y_{u,i} - \hat{b}_{i} - \hat{\mu})$$
+Where $Y_{u,i}$ is the rating from user $u$ of movie $i$, $\varepsilon_{u,i}$ is an indipendent and identically distributed random variable representing the error in our estimate, $\mu$ is the mean of all ratings, $b_{i}$ is the regularized bias effect for movie $i$ and $b_{u}$ is the regularized bias effect for user $u$. These biases are regularized using the optimal parameter $\lambda$ determined using cross-validation on the test set. They are estimated as follows: $$\hat{b}_{i}(\lambda) = \frac{1}{\lambda + n_{i}}\sum^{n_{i}}_{u = 1}(Y_{u,i} - \hat{\mu})$$ $$\hat{b}_{u}(\lambda) = \frac{1}{\lambda + n_{u}}\sum^{n_{u}}_{i = 1}(Y_{u,i} - \hat{b}_{i}(\lambda) - \hat{\mu})$$
 
 The goal is to minimize the root mean squared error (RMSE) of our prediction, defined as such: $$RMSE = \sqrt{\frac{1}{N}\sum_{u,i}(\hat{y}_{u,i} - y_{u,i})^2}$$
 Where $\hat{y}_{u,i}$ is our prediction of the true value $y_{u,i}$.
@@ -187,7 +187,7 @@ b_u <- train_edx %>%
   group_by(userId) %>%
   summarize(b_u = sum(rating - b_i - mu)/(n()+lambda))
 
-#predict ratings on the validation set
+#predict ratings on the test set
 predicted_ratings <- 
   test_edx %>% 
   left_join(b_i, by = "movieId") %>%
@@ -209,7 +209,7 @@ lambda = lambdas[which.min(rmses)]
 qplot(lambdas, rmses)
 lambda
 ```
-As shown in the plot the optimal value of $\lambda$ seems to be somewhere in the 0.25-neighborhood of the displayed value. We can further improve the precision of our optimization by testing a greater amount of values but within the neighborhood of the value.
+As shown in the plot the optimal value of $\lambda$ seems to be somewhere within a 0.25-neighborhood of the displayed value. We can further improve the precision of our optimization by testing a greater amount of values but within the neighborhood of the value.
 
 ```{r precision}
 #try lambdas in the neighborhood of the previous optimum by increments of 0.005
@@ -256,3 +256,13 @@ RMSE(validation$rating, predicted_ratings)
 ```
 
 We achieve an RMSE value lower than 0.8649.
+
+## Conclusion
+
+We have defined a model for predicting a user's rating of a previously unrated movie based on the estimated user and movie biases. This captures the fact that users tend to have different (biased) quality standards when rating movies and the fact that movies tend to be rated depending on their quality, which corresponds to a deviation from the mean (a bias) in their ratings.
+
+Regularizing the user and movie biases improves the accuracy of the model as the relevance of data with small sample sizes is reduced, since we have seen that this happens often in this dataset.
+
+The model's accuracy is acceptable considering its computational simplicity which results in minimal run-time. This model is limited because it ignores the genre and timestamp variables, and doesn't model patterns in the data like users only liking a particular set of genres, or users liking a movie more if they liked movies in the same trilogy or series.
+
+Such patterns would be better recognized by a machine learning algorithm utilizing clustering or matrix factorization on this dataset. This would likely require some form of dimensionality reduction to render the problem tractable, like Principal Component Analysis (PCA).
