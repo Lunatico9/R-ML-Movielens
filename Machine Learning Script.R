@@ -116,10 +116,6 @@ rmses = sapply(lambdas, lambda_RMSE)
 #pick best lambda
 lambda = lambdas[which.min(rmses)]
 
-#show lambda and qplot
-qplot(lambdas, rmses)
-lambda
-
 ###################################
 #Final prediction on validation set
 ###################################
