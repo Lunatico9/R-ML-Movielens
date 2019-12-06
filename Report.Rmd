@@ -81,32 +81,62 @@ To increase the precision of our model, we will regularize these biases to penal
 
 ## Method
 
-As previously shown during the course, the number of movies that have only received few ratings is very high with half the movies having received less than about 125 ratings. Because of this regularization might help with improving the accuracy of the model.
+The data shows that there is a bias effect depending on both the users and the movies, thus we will be estimating this effect for each user and movie, in order to predict ratings expressed by those users on movies they previously didn't rate.
 
-```{r histmovies, echo = FALSE}
+```{r biases}
+edx %>%
+  group_by(movieId) %>%
+  summarize(movie_bias = mean(rating)) %>%
+  ggplot(aes(movie_bias)) +
+  geom_histogram(bins = 70) + 
+  geom_vline(aes(xintercept = mean(movie_bias), color = "mean"),
+             linetype = "dashed", size = .5, show.legend = TRUE) +
+  scale_color_manual(name = "", values = c("blue")) +
+  ggtitle("Movie Bias Distribution")
+
+edx %>%
+  group_by(userId) %>%
+  summarize(user_bias = mean(rating)) %>%
+  ggplot(aes(user_bias)) +
+  geom_histogram(bins = 50) +
+  geom_vline(aes(xintercept = mean(user_bias), color = "mean"),
+             linetype = "dashed", size = .5, show.legend = TRUE) +
+  scale_color_manual(name = "", values = c("blue")) +
+  ggtitle("User Bias Distribution")
+```
+
+As previously shown during the course, the number of movies that have only received few ratings is very high with half the movies having received less than about 125 ratings. Because of this regularization might help with improving the accuracy of the model. We also see that similarly, most users have expressed less than about 65 ratings, with a steadily decreasing amount of users being more prolific in expressing ratings. Regularization can be helpful here too.
+
+
+```{r histratings, echo = TRUE}
 edx %>%
   group_by(movieId) %>%
   summarize(ratings_by_movie = n()) %>%
   ggplot(aes(x = ratings_by_movie, y = ..count..)) +
   geom_histogram(bins = 30) +
-  geom_vline(aes(xintercept = median(ratings_by_movie), color = "median"), linetype = "dashed", size = 1, show.legend = TRUE) +
+  geom_vline(aes(xintercept = median(ratings_by_movie), color = "median"),
+             linetype = "dashed", size = .5, show.legend = TRUE) +
   scale_x_log10() +
-  scale_color_manual(name = "", values = c("red"))
-```
+  scale_color_manual(name = "", values = c("red")) +
+  ggtitle("Movie Ratings Distribution")
 
-We also see that similarly, most users have expressed less than 65 ratings, with a steadily decreasing amount of users being more prolific in expressing ratings. Regularization can be helpful here too.
-
-```{r histusers, echo = FALSE}
 edx %>%
   group_by(userId) %>%
   summarize(ratings_by_user = n()) %>%
   ggplot(aes(x = ratings_by_user, y = ..count..)) +
   geom_histogram(bins = 30) +
-  geom_vline(aes(xintercept = median(ratings_by_user), color = "median"), linetype = "dashed", size = 1, show.legend = TRUE) +
+  geom_vline(aes(xintercept = median(ratings_by_user), color = "median"),
+             linetype = "dashed", size = .5, show.legend = TRUE) +
   scale_x_log10() +
-  scale_color_manual(name = "", values = c("red"))
+  scale_color_manual(name = "", values = c("red")) +
+  ggtitle("User Ratings Distribution")
 ```
 
+Given these observation, we will train a simple machine learning algorithm that estimates regularized biases for each user and movie and uses those, as well as the overall mean of ratings, to make a prediction on unknown ratings, through the following model: $$Y_{u,i} = \mu + b_{i} + b_{u} + \varepsilon_{u,i}$$
+Where $Y_{u,i}$ is the rating from user $u$ of movie $i$, $\varepsilon_{u,i}$ is an indipendent and identically distributed random variable representing the error in our estimate, $\mu$ is the mean of all ratings, $b_{i}$ is the regularized bias effect for movie $i$ and $b_{u}$ is the regularized bias effect for user $u$. These biases are regularized using with the optimal parameter $\lambda$ determined using cross-validation on the test set. They are estimated as follows: $$\hat{b}_{i}(\lambda) = \frac{1}{\lambda + n_{i}}\sum^{n_{i}}_{u = 1}(Y_{u,i} - \hat{\mu})$$ $$\hat{b}_{u}(\lambda) = \frac{1}{\lambda + n_{u}}\sum^{n_{u}}_{i = 1}(Y_{u,i} - \hat{b}_{i} - \hat{\mu})$$
+
+The goal is to minimize the root mean squared error (RMSE) of our prediction, defined as such: $$RMSE = \sqrt{\frac{1}{N}\sum_{u,i}(\hat{y}_{u,i} - y_{u,i})^2}$$
+Where $\hat{y}_{u,i}$ is our prediction of the true value $y_{u,i}$.
 
 ## Results
 
@@ -127,5 +157,102 @@ test_edx <- test_edx %>%
   semi_join(train_edx, by = "userId")
 ```
 
+We define the RMSE function, that calculates the root mean squared error of our estimate. We will use this function to evaluate the accuracy of our prediction.
 
+```{r RMSE}
+#define RMSE output function for solution evaluation
 
+RMSE <- function(true_ratings, predicted_ratings){
+  sqrt(mean((true_ratings - predicted_ratings)^2))
+}
+```
+
+We now want to optimize the tuning parameter $\lambda$ by using cross-validation on the test set we've created.
+
+```{r lambdas}
+#optimize tuning parameter lambda validating on the test set
+
+lambda_RMSE = function(lambda) {
+#calculate overall rating mean
+mu <- mean(train_edx$rating)
+
+#calculate regularized movie bias for each movie using lambda
+b_i <- train_edx %>% 
+  group_by(movieId) %>%
+  summarize(b_i = sum(rating - mu)/(n()+lambda))
+
+#calculate regularized user bias using lambda
+b_u <- train_edx %>% 
+  left_join(b_i, by="movieId") %>%
+  group_by(userId) %>%
+  summarize(b_u = sum(rating - b_i - mu)/(n()+lambda))
+
+#predict ratings on the validation set
+predicted_ratings <- 
+  test_edx %>% 
+  left_join(b_i, by = "movieId") %>%
+  left_join(b_u, by = "userId") %>%
+  mutate(pred = mu + b_i + b_u) %>%
+  pull(pred)
+
+return(RMSE(test_edx$rating, predicted_ratings))
+
+}
+#try lambdas from 1 to 10 by increments of 0.25
+lambdas = seq(1,10,0.25)
+rmses = sapply(lambdas, lambda_RMSE)
+
+#pick best lambda
+lambda = lambdas[which.min(rmses)]
+
+#show lambda and qplot
+qplot(lambdas, rmses)
+lambda
+```
+As shown in the plot the optimal value of $\lambda$ seems to be somewhere in the 0.25-neighborhood of the displayed value. We can further improve the precision of our optimization by testing a greater amount of values but within the neighborhood of the value.
+
+```{r precision}
+#try lambdas in the neighborhood of the previous optimum by increments of 0.005
+lambdas = seq(lambda-0.25,lambda+0.25, 0.005)
+rmses = sapply(lambdas, lambda_RMSE)
+
+#pick best lambda
+lambda = lambdas[which.min(rmses)]
+
+#show lambda and qplot
+qplot(lambdas, rmses)
+lambda
+```
+
+As shown by the console output the optimal value of $\lambda$ has improved in precision compared to the earlier estimate.
+
+We can now run the model on the validation set using the optimal estimate of the parameter $\lambda$ and calculate the RMSE to evaluate its precision.
+
+```{r final}
+#calculate overall rating mean
+mu <- mean(edx$rating)
+
+#calculate regularized movie bias with optimized lambda
+b_i <- edx %>% 
+  group_by(movieId) %>%
+  summarize(b_i = sum(rating - mu)/(n()+lambda))
+
+#calculate regularized user bias with optimized lambda
+b_u <- edx %>% 
+  left_join(b_i, by="movieId") %>%
+  group_by(userId) %>%
+  summarize(b_u = sum(rating - b_i - mu)/(n()+lambda))
+
+#predict ratings on the validation set
+predicted_ratings <- 
+  validation %>% 
+  left_join(b_i, by = "movieId") %>%
+  left_join(b_u, by = "userId") %>%
+  mutate(pred = mu + b_i + b_u) %>%
+  pull(pred)
+
+#display resulting RMSE
+RMSE(validation$rating, predicted_ratings)
+```
+
+We achieve an RMSE value lower than 0.8649.
