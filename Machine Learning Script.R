@@ -99,7 +99,7 @@ predicted_ratings <-
   mutate(pred = mu + b_i + b_u) %>%
   pull(pred)
 
-return(RMSE(predicted_ratings, test_edx$rating))
+return(RMSE(test_edx$rating, predicted_ratings))
 
 }
 #try lambdas from 1 to 10 by increments of 0.25
@@ -108,6 +108,17 @@ rmses = sapply(lambdas, lambda_RMSE)
 
 #pick best lambda
 lambda = lambdas[which.min(rmses)]
+
+#try lambdas in the neighborhood of the previous optimum by increments of 0.005
+lambdas = seq(lambda-0.25,lambda+0.25, 0.005)
+rmses = sapply(lambdas, lambda_RMSE)
+
+#pick best lambda
+lambda = lambdas[which.min(rmses)]
+
+#show lambda and qplot
+qplot(lambdas, rmses)
+lambda
 
 ###################################
 #Final prediction on validation set
@@ -136,4 +147,4 @@ predicted_ratings <-
   pull(pred)
 
 #display resulting RMSE
-RMSE(predicted_ratings, validation$rating)
+RMSE(validation$rating, predicted_ratings)
